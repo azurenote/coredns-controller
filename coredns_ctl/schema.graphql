@@ -1,0 +1,62 @@
+
+type Query {
+    hello: String!
+    records: [Record]!
+}
+
+type Record {
+    id: Int!
+    zone: String!
+    name: String!
+    ttl: Int!
+    content: RecordContent
+    recordType: String!
+}
+
+
+type RecordA {
+    ip: String!
+}
+
+input InRecordA {
+    ip: String !
+}
+
+type RecordMX {
+    host: String!
+    priority: Int!
+}
+
+input InRecordMX {
+    host: String!
+    priority: Int!
+}
+
+
+union RecordContent = RecordA | RecordMX
+
+type Mutation {
+    login(username: String!, password: String!): Boolean!
+    logout: Boolean!
+
+    postRecordA(record: NewRecordA!): Record!
+    postRecordMX(record: NewRecordMX!): Record!
+}
+
+
+input NewRecordA {
+    zone: String!
+    name: String!
+    ttl: Int!
+    content: InRecordA!
+    recordType: String!
+}
+
+
+input NewRecordMX {
+    zone: String!
+    name: String!
+    ttl: Int!
+    content: InRecordMX!
+    recordType: String!
+}
