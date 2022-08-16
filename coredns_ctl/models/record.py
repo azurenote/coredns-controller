@@ -1,11 +1,8 @@
 
 
-from sqlalchemy.orm import declarative_base
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.types import JSON
-
-Base = declarative_base()
-
+from .defs import Base
 
 class RecordEntity(Base):
 
