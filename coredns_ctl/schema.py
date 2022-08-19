@@ -2,7 +2,7 @@ from strawberry import type, field, union, Schema, mutation
 from strawberry.types import Info
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update, delete
 from coredns_ctl.models import RecordEntity, ZoneEntity
 
 
@@ -53,6 +53,14 @@ class Record:
 
 
 @type
+class ObjectId:
+    id: int
+
+    def __init__(self, object_id: int):
+        self.id = object_id
+
+
+@type
 class Query:
     @field
     async def records(self, info: Info) -> list[Record]:
@@ -97,30 +105,48 @@ class Query:
         return output
 
 
+@type
 class Mutation:
 
     @mutation
-    async def add_zone(self, name: str) -> Zone:
-        entity = ZoneEntity()
-        entity.name = name
+    async def add_zone(self, name: str, info: Info) -> Zone:
+        async_session = info.context.session
+
+        async with async_session() as session:
+            async with session.begin():
+                entity = ZoneEntity()
+                entity.name = name
+
+                session.add(entity)
+                await session.commit()
 
         return Zone(entity)
 
-    async def update_zone(self) -> Zone:
-        pass
+    @mutation
+    async def update_zone(self, zone_id: int, name: str, info: Info) -> Zone:
+        async with info.context.session() as session:
+            async with session.begin():
+                query = update(ZoneEntity)\
+                    .values(name=name)\
+                    .where(ZoneEntity.id == zone_id)\
+                    .execution_options(synchronize_session='fetch')
 
-    async def delete_zone(self):
-        pass
+                await session.execute(query)
+
+                q_select = select(ZoneEntity).where(ZoneEntity.id == zone_id)
+
+                result = await session.execute(q_select)
+                return Zone(result.scalar())
 
     @mutation
-    async def add_record(self) -> Record:
-        pass
+    async def delete_zone(self, zone_id: int, info: Info) -> ObjectId:
+        async with info.context.session() as session:
+            async with session.begin():
+                query = delete(ZoneEntity).where(ZoneEntity.id == zone_id)
 
-    async def update_record(self) -> Record:
-        pass
+                await session.execute(query)
 
-    async def delete_record(self):
-        pass
+                return ObjectId(zone_id)
 
 
-schema = Schema(query=Query)
+schema = Schema(query=Query, mutation=Mutation)
