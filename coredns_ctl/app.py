@@ -1,10 +1,27 @@
-from fastapi import FastAPI
-from strawberry.fastapi import GraphQLRouter
+from fastapi import FastAPI, Depends
+from strawberry.fastapi import GraphQLRouter, BaseContext
+from dotenv import load_dotenv
 from .schema import schema
+from .database import create_engine, get_session
 
-graphql_app = GraphQLRouter(schema)
 
-app = FastAPI()
+class CustomContext(BaseContext):
+
+    def __init__(self, engine, session):
+        self.engine = engine
+        self.session = session
+
+
+def get_context(engine=Depends(create_engine), session=Depends(get_session)) -> CustomContext:
+    return CustomContext(engine, session)
+
+
+graphql_app = GraphQLRouter(schema, context_getter=get_context)
+
+load_dotenv()
+
+app = FastAPI(dependencies=[Depends(create_engine)])
+
 app.include_router(graphql_app, prefix="/graphql")
 
 

@@ -1,12 +1,6 @@
-from os import environ
-from dotenv import load_dotenv
-from strawberry import type, field, union, Schema
+from strawberry import type, field, union, Schema, mutation
+from strawberry.types import Info
 from datetime import datetime
-
-
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from sqlalchemy import select
 from coredns_ctl.models import RecordEntity, ZoneEntity
@@ -22,6 +16,7 @@ class Zone:
         self.id = entity.id
         self.name = entity.name
         self.create_at = entity.created_at
+
 
 @type
 class RecordA:
@@ -60,81 +55,72 @@ class Record:
 @type
 class Query:
     @field
-    async def records(self) -> list[Record]:
-
-        load_dotenv()
-
-        engine = create_async_engine(
-            environ.get('DATABASE_URL'),
-            echo=True,
-        )
-
+    async def records(self, info: Info) -> list[Record]:
         output = []
 
-        async with engine.begin() as conn:
-            # select a Result, which will be delivered with buffered
-            # results
-            async_session = sessionmaker(
-                engine, expire_on_commit=False, class_=AsyncSession
-            )
+        async_session = info.context.session
 
-            async with async_session() as session:
+        async with async_session() as session:
+            async with session.begin():
+                stmt = select(RecordEntity)
 
-                async with session.begin():
-                    stmt = select(RecordEntity)
+                result = await session.execute(stmt)
 
-                    result = await session.execute(stmt)
+                temp = result.scalars()
 
-                    temp = result.scalars()
+                for record in temp:
+                    item = Record(record)
 
-                    for record in temp:
-                        item = Record(record)
-
-                        output.append(item)
-            
-        # for AsyncEngine created in function scope, close and
-        # clean-up pooled connections
-        await engine.dispose()
+                    output.append(item)
 
         return output
 
     @field
-    async def zones(self) -> list[Zone]:
-        load_dotenv()
-
-        engine = create_async_engine(
-            environ.get('DATABASE_URL'),
-            echo=True,
-        )
-
+    async def zones(self, info: Info) -> list[Zone]:
         output = []
 
-        async with engine.begin() as conn:
-            # select a Result, which will be delivered with buffered
-            # results
-            async_session = sessionmaker(
-                engine, expire_on_commit=False, class_=AsyncSession
-            )
+        async_session = info.context.session
 
-            async with async_session() as session:
-                async with session.begin():
-                    stmt = select(ZoneEntity)
+        async with async_session() as session:
+            async with session.begin():
+                stmt = select(ZoneEntity)
 
-                    result = await session.execute(stmt)
+                result = await session.execute(stmt)
 
-                    temp = result.scalars()
+                temp = result.scalars()
 
-                    for record in temp:
-                        item = Zone(record)
+                for record in temp:
+                    item = Zone(record)
 
-                        output.append(item)
-
-        # for AsyncEngine created in function scope, close and
-        # clean-up pooled connections
-        await engine.dispose()
+                    output.append(item)
 
         return output
 
+
+class Mutation:
+
+    @mutation
+    async def add_zone(self, name: str) -> Zone:
+        entity = ZoneEntity()
+        entity.name = name
+
+        return Zone(entity)
+
+    async def update_zone(self) -> Zone:
+        pass
+
+    async def delete_zone(self):
+        pass
+
+    @mutation
+    async def add_record(self) -> Record:
+        pass
+
+    async def update_record(self) -> Record:
+        pass
+
+    async def delete_record(self):
+        pass
 
 
 schema = Schema(query=Query)
