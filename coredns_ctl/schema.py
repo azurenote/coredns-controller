@@ -1,21 +1,10 @@
-from strawberry import type, field, union, Schema, mutation
+from sqlalchemy.orm import joinedload
+from strawberry import type, field, union, Schema, mutation, input
 from strawberry.types import Info
 from datetime import datetime
 
 from sqlalchemy import select, update, delete
 from coredns_ctl.models import RecordEntity, ZoneEntity
-
-
-@type
-class Zone:
-    id: int
-    name: str
-    create_at: datetime
-
-    def __init__(self, entity: ZoneEntity):
-        self.id = entity.id
-        self.name = entity.name
-        self.create_at = entity.created_at
 
 
 @type
@@ -37,6 +26,7 @@ class Record:
     ttl: int
     content: union('RecordContent', types=(RecordA, RecordMX))
     record_type: str
+    zone_id: int
 
     def __init__(self, entity: RecordEntity):
         self.id = entity.id
@@ -44,12 +34,36 @@ class Record:
         self.zone = entity.zone
         self.ttl = entity.ttl
         self.record_type = entity.record_type
+        self.zone_id = entity.zone_id
 
         match entity.record_type:
             case 'A':
                 self.content = RecordA(**entity.content)
             case 'MX':
                 self.content = RecordMX(**entity.content)
+
+
+@input
+class NewRecord:
+    name: str
+    zone_id: int
+    ttl: int
+    record_type: str
+
+
+@type
+class Zone:
+    id: int
+    name: str
+    create_at: datetime
+
+    records: list[Record]
+
+    def __init__(self, entity: ZoneEntity):
+        self.id = entity.id
+        self.name = entity.name
+        self.create_at = entity.created_at
+        self.records = entity.records
 
 
 @type
@@ -91,7 +105,8 @@ class Query:
 
         async with async_session() as session:
             async with session.begin():
-                stmt = select(ZoneEntity)
+                stmt = select(ZoneEntity)\
+                    .options(joinedload(ZoneEntity.records))
 
                 result = await session.execute(stmt)
 
@@ -147,6 +162,48 @@ class Mutation:
                 await session.execute(query)
 
                 return ObjectId(zone_id)
+
+    @mutation
+    async def add_record(self, data: NewRecord, info: Info) -> Record:
+        async_session = info.context.session
+
+        async with async_session() as session:
+            async with session.begin():
+                entity = RecordEntity()
+                entity.zone_id = data.zone_id
+                entity.name = data.name
+                entity.ttl = data.ttl
+
+                session.add(entity)
+                await session.commit()
+
+        return Record(entity)
+
+    @mutation
+    async def update_record(self, record_id: int, name: str, info: Info) -> Record:
+        async with info.context.session() as session:
+            async with session.begin():
+                query = update(RecordEntity)\
+                    .values(name=name)\
+                    .where(RecordEntity.id == record_id)\
+                    .execution_options(synchronize_session='fetch')
+
+                await session.execute(query)
+
+                q_select = select(RecordEntity).where(RecordEntity.id == record_id)
+
+                result = await session.execute(q_select)
+                return Record(result.scalar())
+
+    @mutation
+    async def delete_record(self, record_id: int, info: Info) -> ObjectId:
+        async with info.context.session() as session:
+            async with session.begin():
+                query = delete(RecordEntity).where(RecordEntity.id == record_id)
+
+                await session.execute(query)
+
+                return ObjectId(record_id)
 
 
 schema = Schema(query=Query, mutation=Mutation)

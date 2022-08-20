@@ -1,8 +1,9 @@
 
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.types import JSON
 from .defs import Base
+
 
 class RecordEntity(Base):
 
@@ -15,5 +16,4 @@ class RecordEntity(Base):
     content = Column(JSON, nullable=False)
     record_type = Column(String, nullable=False)
 
-
-
+    zone_id = Column(Integer, ForeignKey('coredns_zone.id'), nullable=False)
