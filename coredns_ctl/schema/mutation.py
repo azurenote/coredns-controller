@@ -3,6 +3,7 @@ from strawberry.types import Info
 from sqlalchemy import select, update, delete
 from coredns_ctl.schema.query import Zone, Record, ObjectId
 from coredns_ctl.models import RecordEntity, ZoneEntity
+import json
 
 
 @input
@@ -10,7 +11,25 @@ class NewRecord:
     name: str
     zone_id: int
     ttl: int
-    record_type: str
+
+
+@input
+class NewARecord:
+    common: NewRecord
+    ip: str
+
+
+@input
+class NewMxRecord:
+    common: NewRecord
+    host: str
+    priority: int
+
+
+@input
+class NewCnameRecord:
+    common: NewRecord
+    host: str
 
 
 @type
@@ -57,21 +76,49 @@ class Mutation:
                 return ObjectId(zone_id)
 
     @mutation
-    async def add_record(self, data: NewRecord, info: Info) -> Record:
+    async def add_a_record(self, data: NewARecord, info: Info) -> Record:
         async with info.context.session() as session:
             async with session.begin():
 
-                query = select(ZoneEntity).where(ZoneEntity.id == data.zone_id)
+                query = select(ZoneEntity).where(ZoneEntity.id == data.common.zone_id)
 
                 result = await session.execute(query)
                 zone: ZoneEntity = result.scalar()
 
                 entity = RecordEntity()
-                entity.zone_id = data.zone_id
+                entity.zone_id = data.common.zone_id
                 entity.zone = zone.name
-                entity.name = data.name
-                entity.ttl = data.ttl
-                entity.record_type = data.record_type
+                entity.name = data.common.name
+                entity.ttl = data.common.ttl
+                entity.record_type = 'A'
+                entity.content = {
+                    'ip': data.ip
+                }
+
+                session.add(entity)
+                await session.commit()
+
+                return Record(entity)
+
+    @mutation
+    async def add_mx_record(self, data: NewMxRecord, info: Info) -> Record:
+        async with info.context.session() as session:
+            async with session.begin():
+                query = select(ZoneEntity).where(ZoneEntity.id == data.common.zone_id)
+
+                result = await session.execute(query)
+                zone: ZoneEntity = result.scalar()
+
+                entity = RecordEntity()
+                entity.zone_id = data.common.zone_id
+                entity.zone = zone.name
+                entity.name = data.common.name
+                entity.ttl = data.common.ttl
+                entity.record_type = 'MX'
+                entity.content = json.dumps({
+                    'host': data.host,
+                    'priority': data.priority
+                })
 
                 session.add(entity)
                 await session.commit()
