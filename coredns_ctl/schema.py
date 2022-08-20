@@ -135,7 +135,7 @@ class Mutation:
                 session.add(entity)
                 await session.commit()
 
-        return Zone(entity)
+                return Zone(entity)
 
     @mutation
     async def update_zone(self, zone_id: int, name: str, info: Info) -> Zone:
