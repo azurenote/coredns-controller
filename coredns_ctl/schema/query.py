@@ -55,7 +55,8 @@ class ZoneRecordsEdge:
 
     def __init__(self, node: Record, cursor: str = None):
         self.node = node
-        self.cursor = cursor if cursor is not None else b64encode(node.id.to_bytes(byteorder='little', length=4))
+        self.cursor = cursor if cursor is not None\
+            else b64encode(node.id.to_bytes(byteorder='little', length=4))
 
 
 @type
@@ -100,7 +101,7 @@ class Zone:
 
                 page_info = PageInfo(True)
                 edges = [
-                    ZoneRecordsEdge(node=item)
+                    ZoneRecordsEdge(node=Record(item))
                     for item in items
                 ]
 
@@ -119,24 +120,34 @@ class ObjectId:
 class Query:
     @field
     async def records(self, info: Info) -> list[Record]:
-        output = []
-
-        async_session = info.context.session
-
-        async with async_session() as session:
+        async with info.context.session() as session:
             async with session.begin():
-                stmt = select(RecordEntity)
+                query = select(RecordEntity)
 
-                result = await session.execute(stmt)
+                result = await session.execute(query)
 
-                temp = result.scalars()
+                return [
+                    Record(record)
+                    for record in result.scalars()
+                ]
 
-                for record in temp:
-                    item = Record(record)
+    @field
+    async def record(self, record_id: int, info: Info) -> Record:
+        async with info.context.session() as session:
+            async with session.begin():
+                query = select(RecordEntity).where(RecordEntity.id == record_id).limit(1)
+                result = await session.execute(query)
 
-                    output.append(item)
+                return Record(result.scalar())
 
-        return output
+    @field
+    async def zone(self, zone_id: int, info: Info) -> Zone:
+        async with info.context.session() as session:
+            async with session.begin():
+                query = select(ZoneEntity).where(ZoneEntity.id == zone_id).limit(1)
+                result = await session.execute(query)
+
+                return Zone(result.scalar())
 
     @field
     async def zones(self, info: Info) -> list[Zone]:
