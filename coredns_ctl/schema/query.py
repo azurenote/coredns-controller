@@ -26,6 +26,7 @@ class Record:
     content: union('RecordContent', types=(RecordA, RecordMX))
     record_type: str
     zone_id: int
+    created_at: datetime
 
     def __init__(self, entity: RecordEntity):
         self.id = entity.id
@@ -34,6 +35,7 @@ class Record:
         self.ttl = entity.ttl
         self.record_type = entity.record_type
         self.zone_id = entity.zone_id
+        self.created_at = entity.created_at
 
         match entity.record_type:
             case 'A':
@@ -77,12 +79,12 @@ class ZoneRecordsConnection:
 class Zone:
     id: int
     name: str
-    create_at: datetime
+    created_at: datetime
 
     def __init__(self, entity: ZoneEntity):
         self.id = entity.id
         self.name = entity.name
-        self.create_at = entity.created_at
+        self.created_at = entity.created_at
         self.records = entity.records
 
     @field
@@ -119,10 +121,13 @@ class ObjectId:
 @type
 class Query:
     @field
-    async def records(self, info: Info) -> list[Record]:
+    async def records(self, info: Info, zone_id: int = 0) -> list[Record]:
         async with info.context.session() as session:
             async with session.begin():
                 query = select(RecordEntity)
+
+                if zone_id > 0:
+                    query = query.where(RecordEntity.zone_id == zone_id)
 
                 result = await session.execute(query)
 
@@ -150,14 +155,17 @@ class Query:
                 return Zone(result.scalar())
 
     @field
-    async def zones(self, info: Info) -> list[Zone]:
+    async def zones(self, info: Info, offset: int = 0, size: int = 10) -> list[Zone]:
         output = []
 
         async_session = info.context.session
 
         async with async_session() as session:
             async with session.begin():
-                stmt = select(ZoneEntity)
+                stmt = select(ZoneEntity)\
+                    .order_by(ZoneEntity.id.desc())\
+                    .offset(offset)\
+                    .limit(size)
 
                 result = await session.execute(stmt)
 

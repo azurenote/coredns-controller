@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter, BaseContext
 from dotenv import load_dotenv
 from .schema import schema
@@ -21,6 +22,14 @@ graphql_app = GraphQLRouter(schema, context_getter=get_context)
 load_dotenv()
 
 app = FastAPI(dependencies=[Depends(create_engine)])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
+
 
 app.include_router(graphql_app, prefix="/graphql")
 
