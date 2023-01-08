@@ -16,7 +16,7 @@ class RecordEntity(Base):
     content = Column(JSON, nullable=False)
     record_type = Column(String, nullable=False)
 
-    created_at = Column(DateTime)
-    updated_at = Column(DateTime)
+    created_at = Column(DateTime, server_default='now()')
+    updated_at = Column(DateTime, server_default='now()')
 
     zone_id = Column(Integer, ForeignKey('coredns_zone.id'), nullable=False)

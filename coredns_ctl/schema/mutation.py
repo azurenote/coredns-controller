@@ -1,3 +1,5 @@
+import logging
+
 from strawberry import type, mutation, input
 from strawberry.types import Info
 from sqlalchemy import select, update, delete
@@ -79,51 +81,70 @@ class Mutation:
     async def add_a_record(self, data: NewARecord, info: Info) -> Record:
         async with info.context.session() as session:
             async with session.begin():
+                try:
+                    query = select(ZoneEntity).where(ZoneEntity.id == data.common.zone_id)
 
-                query = select(ZoneEntity).where(ZoneEntity.id == data.common.zone_id)
+                    result = await session.execute(query)
+                    zone: ZoneEntity = result.scalar()
 
-                result = await session.execute(query)
-                zone: ZoneEntity = result.scalar()
+                    entity = RecordEntity()
+                    entity.zone_id = data.common.zone_id
+                    entity.zone = zone.name
+                    entity.name = data.common.name
+                    entity.ttl = data.common.ttl
+                    entity.record_type = 'A'
+                    entity.content = {
+                        'ip': data.ip
+                    }
 
-                entity = RecordEntity()
-                entity.zone_id = data.common.zone_id
-                entity.zone = zone.name
-                entity.name = data.common.name
-                entity.ttl = data.common.ttl
-                entity.record_type = 'A'
-                entity.content = {
-                    'ip': data.ip
-                }
+                    session.add(entity)
+                    await session.flush()
 
-                session.add(entity)
-                await session.commit()
+                    query = select(RecordEntity).where(RecordEntity.id == entity.id)
+                    result = await session.execute(query)
 
-                return Record(entity)
+                    record = result.scalar()
+
+                    record.content = json.loads(record.content)
+                    return Record(record)
+                except Exception as ex:
+                    logging.error(ex)
+                    await session.rollback()
 
     @mutation
     async def add_mx_record(self, data: NewMxRecord, info: Info) -> Record:
         async with info.context.session() as session:
             async with session.begin():
-                query = select(ZoneEntity).where(ZoneEntity.id == data.common.zone_id)
+                try:
+                    query = select(ZoneEntity).where(ZoneEntity.id == data.common.zone_id)
 
-                result = await session.execute(query)
-                zone: ZoneEntity = result.scalar()
+                    result = await session.execute(query)
+                    zone: ZoneEntity = result.scalar()
 
-                entity = RecordEntity()
-                entity.zone_id = data.common.zone_id
-                entity.zone = zone.name
-                entity.name = data.common.name
-                entity.ttl = data.common.ttl
-                entity.record_type = 'MX'
-                entity.content = json.dumps({
-                    'host': data.host,
-                    'priority': data.priority
-                })
+                    entity = RecordEntity()
+                    entity.zone_id = data.common.zone_id
+                    entity.zone = zone.name
+                    entity.name = data.common.name
+                    entity.ttl = data.common.ttl
+                    entity.record_type = 'MX'
+                    entity.content = json.dumps({
+                        'host': data.host,
+                        'priority': data.priority
+                    })
 
-                session.add(entity)
-                await session.commit()
+                    session.add(entity)
+                    await session.flush()
 
-                return Record(entity)
+                    query = select(RecordEntity).where(RecordEntity.id == entity.id)
+                    result = await session.execute(query)
+
+                    record = result.scalar()
+
+                    record.content = json.loads(record.content)
+                    return Record(record)
+                except Exception as ex:
+                    logging.error(ex)
+                    await session.rollback()
 
     @mutation
     async def update_record(self, record_id: int, name: str, info: Info) -> Record:
